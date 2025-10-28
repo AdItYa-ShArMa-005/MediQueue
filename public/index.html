@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Triage System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏥 Emergency Triage & Routing System</h1>
+            <p>Fast, Efficient, Life-Saving Patient Management</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="totalPatients">0</h3>
+                <p>Total Patients</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="criticalCount">0</h3>
+                <p>Critical</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="urgentCount">0</h3>
+                <p>Urgent</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="normalCount">0</h3>
+                <p>Non-Urgent</p>
+            </div>
+        </div>
+
+        <div class="main-section">
+            <!-- New Patient Section -->
+            <div class="card">
+                <h2>➕ New Patient Registration</h2>
+                <form id="newPatientForm">
+                    <div class="form-group">
+                        <label for="newName">Patient Name *</label>
+                        <input type="text" id="newName" required placeholder="Enter full name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newAge">Age *</label>
+                        <input type="number" id="newAge" required placeholder="Enter age" min="0" max="120">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newContact">Contact Number *</label>
+                        <input type="tel" id="newContact" required placeholder="Enter 10-digit number" pattern="[0-9]{10}">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newComplaint">Chief Complaint *</label>
+                        <textarea id="newComplaint" required placeholder="Describe the main problem"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Vital Signs</label>
+                        <input type="text" id="newBP" placeholder="Blood Pressure (e.g., 120/80)" style="margin-bottom: 10px;">
+                        <input type="number" id="newPulse" placeholder="Pulse Rate (bpm)" style="margin-bottom: 10px;">
+                        <input type="number" id="newTemp" placeholder="Temperature (°F)" step="0.1">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Symptoms (Select all that apply)</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="chestPain" value="chest_pain">
+                                <label for="chestPain">Chest Pain</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="breathing" value="breathing">
+                                <label for="breathing">Difficulty Breathing</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="bleeding" value="bleeding">
+                                <label for="bleeding">Severe Bleeding</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="unconscious" value="unconscious">
+                                <label for="unconscious">Unconscious</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="fever" value="fever">
+                                <label for="fever">High Fever</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="pain" value="pain">
+                                <label for="pain">Severe Pain</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit">Register & Add to Queue</button>
+                </form>
+            </div>
+
+            <!-- Existing Patient Section -->
+            <div class="card">
+                <h2>🔍 Existing Patient Lookup</h2>
+                <form id="searchPatientForm">
+                    <div class="form-group">
+                        <label for="searchQuery">Search by Name or Contact</label>
+                        <input type="text" id="searchQuery" placeholder="Enter name or phone number">
+                    </div>
+                    <button type="submit">Search Patient</button>
+                </form>
+
+                <div id="searchResults" class="hidden"></div>
+            </div>
+        </div>
+
+        <!-- Queue Section -->
+        <div class="queue-section">
+            <h2>📋 Patient Queue (Priority-Based)</h2>
+            <div id="queueList">
+                <p style="text-align: center; color: #999; padding: 40px;">No patients in queue. Register a new patient to get started.</p>
+            </div>
+        </div>
+
+        <!-- Rooms Section -->
+        <div class="queue-section" style="margin-top: 30px;">
+            <h2>🏥 Room Management</h2>
+            <!-- <div style="margin-bottom: 20px;">
+                <button onclick="initializeRooms()" style="width: auto; padding: 10px 20px;">Initialize 10 Rooms</button>
+            </div> -->
+            <div id="roomsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                <p style="text-align: center; color: #999; padding: 40px; grid-column: 1/-1;">No rooms available. Click "Initialize Rooms" to create.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Assignment Modal -->
+    <div id="roomModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%;">
+            <h2 style="color: #667eea; margin-bottom: 20px;">Assign Room</h2>
+            <p id="modalPatientInfo" style="margin-bottom: 20px; color: #666;"></p>
+            <div id="availableRoomsList" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;"></div>
+            <button onclick="closeRoomModal()" style="background: #999; width: auto; padding: 10px 20px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (CDN version) -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        
+        // Your web app's Firebase configuration
+        // TODO: Replace with your Firebase project configuration
+    const firebaseConfig = {
+            apiKey: "AIzaSyBLh8hwA1_asveSxisiZyRMbi-So7t1rE0",
+            authDomain: "medical-triage-system-5685f.firebaseapp.com",
+            projectId: "medical-triage-system-5685f",
+            storageBucket: "medical-triage-system-5685f.firebasestorage.app",
+            messagingSenderId: "1043408410847",
+            appId: "1:1043408410847:web:9ebdf47a2d02af006bb16a"
+          };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        console.log("✅ Firebase initialized");
+        
+        // Make db available globally
+        window.firebaseDB = db;
+    </script>
+    
+    <!-- Your application script -->
+    <script type="module" src="script.js"></script>
+</body>
+</html>
