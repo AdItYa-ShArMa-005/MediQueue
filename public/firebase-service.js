@@ -453,7 +453,7 @@ export async function getStatistics() {
     try {
         // Get all waiting patients
         const patientsSnapshot = await getDocs(
-            query(collection(db, 'patients'), where('status', '==', 'waiting'))
+            query(collection(db, 'patients'))
         );
 
         const patients = [];

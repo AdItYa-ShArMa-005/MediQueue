@@ -111,7 +111,7 @@ async function handleNewPatientSubmit(e) {
     }
 
     // Check if patient already exists
-    const { checkIfPatientExists } = await import('./firebase-service.js');
+    // const { checkIfPatientExists } = await import('./firebase-service.js');
     const existResult = await checkIfPatientExists(name, contact);
 
     if (existResult.exists) {
