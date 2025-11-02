@@ -114,12 +114,10 @@ async function handleNewPatientSubmit(e) {
     const contact = document.getElementById('newContact').value.trim();
 
     if (!name || !contact) {
-        alert("⚠ Please enter both name and contact number.");
+        alert("⚠️ Please enter both name and contact number.");
         return;
     }
 
-        // Check if patient already exists
-    // const { checkIfPatientExists } = await import('./firebase-service.js');
     // Check if patient already exists
     const existResult = await checkIfPatientExists(name, contact);
 
@@ -134,7 +132,7 @@ async function handleNewPatientSubmit(e) {
             priority: existing.priority?.toUpperCase() || "N/A"
         });
 
-        return; // Stop here — don’t register again
+        return; // Stop here – don't register again
     }
 
     
@@ -229,7 +227,10 @@ function renderQueue(patients) {
         return `
             <div class="patient-card" style="border-left-color: ${borderColor}">
                 <div class="patient-info">
-                    <h3>👤 ${patient.name}</h3>
+                    <h3>👤 ${patient.name}
+                         <span style="float:right; color:#444; font-size:14px;">🧾 Token: ${patient.tokenNumber || 'N/A'}</span>
+                    </h3>
+
                     <p><strong>Age:</strong> ${patient.age} | <strong>Contact:</strong> ${patient.contact}</p>
                     <p><strong>Complaint:</strong> ${patient.complaint}</p>
                     <p><strong>Wait Time:</strong> ${waitTime}</p>
@@ -255,6 +256,11 @@ function displaySearchResults(results) {
         const checkInDate = patient.checkInTime?.toDate?.() || new Date();
         const formattedDate = checkInDate.toLocaleString();
         
+        // Check if room is assigned
+        const roomInfo = patient.assignedRoomNumber 
+            ? `<p><strong>Room:</strong> 🚪 ${patient.assignedRoomNumber}</p>` 
+            : '<p><strong>Room:</strong> <em style="color: #999;">Not Assigned</em></p>';
+        
         return `
             <div class="search-result">
                 <h3>Patient: ${patient.name}</h3>
@@ -262,6 +268,7 @@ function displaySearchResults(results) {
                 <p><strong>Complaint:</strong> ${patient.complaint}</p>
                 <p><strong>Status:</strong> ${patient.status.toUpperCase()}</p>
                 <p><strong>Check-in:</strong> ${formattedDate}</p>
+                ${roomInfo}
                 <span class="priority-badge priority-${patient.priority}">${priorityText}</span>
             </div>
         `;
@@ -578,3 +585,43 @@ window.confirmDischarge = async function(patientId, patientName) {
         }
     }
 }
+
+const searchInput = document.getElementById('searchInput');
+const resultsContainer = document.getElementById('searchResults');
+
+searchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+
+    if (query.length < 2) {
+        resultsContainer.innerHTML = '';
+        return;
+    }
+
+    const response = await searchPatients(query);
+
+    if (response.success) {
+        const patients = response.data;
+
+        if (patients.length === 0) {
+            resultsContainer.innerHTML = '<p>No patients found.</p>';
+            return;
+        }
+
+        // Render results – includes Room info
+        resultsContainer.innerHTML = patients.map(patient => `
+            <div class="search-result-item">
+                <h4>${patient.name} 
+                    <span class="priority-tag ${patient.priority}">
+                        ${patient.priority.toUpperCase()}
+                    </span>
+                </h4>
+                <p>Age: ${patient.age}</p>
+                <p>Contact: ${patient.contact}</p>
+                <p>Status: ${patient.status}</p>
+                <p><strong>Room:</strong> ${patient.assignedRoomNumber ? patient.assignedRoomNumber : '<em>Not Assigned</em>'}</p>
+            </div>
+        `).join('');
+    } else {
+        resultsContainer.innerHTML = `<p>Error: ${response.message}</p>`;
+    }
+});
