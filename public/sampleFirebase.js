@@ -1,108 +1,147 @@
 // Firebase Backend Service for Triage System
-import { 
-    db, 
-    collection, 
-    addDoc, 
-    getDocs, 
-    getDoc,
-    doc, 
-    updateDoc, 
-    deleteDoc, 
-    query, 
-    where, 
-    orderBy, 
-    limit,
-    onSnapshot,
-    serverTimestamp
+import {
+db,
+collection,
+addDoc,
+getDocs,
+getDoc,
+doc,
+updateDoc,
+deleteDoc,
+query,
+where,
+orderBy,
+limit,
+onSnapshot,
+serverTimestamp
 } from './firebase-config.js';
 
-// ==================== PATIENT OPERATIONS ====================
 
-/**
- * Generate a token number based on patient priority and queue state
- */
- export async function generateTokenAndPosition(priority) {
-    const patientsCollection = collection(db, "patients");
-    const q = query(
-        patientsCollection,
-        where("status", "==", "waiting"),
-        orderBy("checkInTime", "asc")
-    );
+// Scheduling configuration
+export const MAX_APPOINTMENTS_PER_DAY = 50; // change as required
+export const CLINIC_START_TIME = '09:00'; // 24h HH:mm
+export const SLOT_DURATION_MIN = 25; // consult time in minutes
+export const BUFFER_MIN = 5; // buffer between patients
+export const SLOT_TOTAL_MIN = SLOT_DURATION_MIN + BUFFER_MIN; // 30
 
-    const snapshot = await getDocs(q);
-    const patients = snapshot.docs.map(doc => doc.data());
 
-    let baseToken = 0;
-    let tokenSeriesStart = 0;
-
-    if (priority === "green") {
-        baseToken = patients.filter(p => p.priority === "green").length;
-        tokenSeriesStart = 100;
-    } else if (priority === "yellow") {
-        baseToken = patients.filter(p => p.priority === "yellow").length;
-        tokenSeriesStart = 200;
-    } else if (priority === "red") {
-        baseToken = patients.filter(p => p.priority === "red").length;
-        tokenSeriesStart = 300;
-    }
-
-    const tokenNumber = tokenSeriesStart + baseToken + 1;
-
-    // Determine position for scheduling
-    let positionIndex = 0;
-    if (priority === "red") {
-        positionIndex = 0; // always front
-    } else if (priority === "yellow") {
-        // after last red but before most greens
-        const redCount = patients.filter(p => p.priority === "red").length;
-        const yellowCount = patients.filter(p => p.priority === "yellow").length;
-        positionIndex = redCount + Math.floor(yellowCount / 2);
-    } else {
-        // after all reds and yellows
-        const redCount = patients.filter(p => p.priority === "red").length;
-        const yellowCount = patients.filter(p => p.priority === "yellow").length;
-        positionIndex = redCount + yellowCount + patients.filter(p => p.priority === "green").length;
-    }
-
-    return { tokenNumber, positionIndex };
+const pad = n => n.toString().padStart(2, '0');
+function formatDateKey(d) {
+// YYYY-MM-DD
+return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
 
-// ==================== PATIENT OPERATIONS ====================
+function parseHHMM(hhmm) {
+const [hh, mm] = hhmm.split(':').map(Number);
+return { hh, mm };
+}
 
-/**
- * Add new patient
- */
+
+function addMinutesToTime(hhmm, minutesToAdd) {
+const { hh, mm } = parseHHMM(hhmm);
+const dt = new Date();
+dt.setHours(hh, mm, 0, 0);
+dt.setMinutes(dt.getMinutes() + minutesToAdd);
+const hh2 = pad(dt.getHours());
+const mm2 = pad(dt.getMinutes());
+return `${hh2}:${mm2}`;
+}
+
+
+// Get count of scheduled waiting patients for a given date
+async function getCountsForDate(dateKey) {
+const q = query(
+collection(db, 'patients'),
+where('status', '==', 'waiting'),
+where('appointmentDate', '==', dateKey)
+);
+
+
+const snapshot = await getDocs(q);
+const patients = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+
+const counts = {
+total: patients.length,
+red: patients.filter(p => p.priority === 'red').length,
+yellow: patients.filter(p => p.priority === 'yellow').length,
+green: patients.filter(p => p.priority === 'green').length,
+patients
+};
+
+
+return counts;
+}
+
+
+// Find earliest date (starting today) with available appointment capacity
+export async function findEarliestAvailableDate(fromDate = new Date()) {
+let d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+while (true) {
+const key = formatDateKey(d);
+const counts = await getCountsForDate(key);
+if (counts.total < MAX_APPOINTMENTS_PER_DAY) return key;
+d.setDate(d.getDate() + 1);
+}
+}
+// Generate token number based on priority and current scheduled counts for a date
+export function computeTimesForSlotIndex(slotIndex) {
+const minutesFromStart = slotIndex * SLOT_TOTAL_MIN;
+const start = addMinutesToTime(CLINIC_START_TIME, minutesFromStart);
+const end = addMinutesToTime(start, SLOT_DURATION_MIN);
+return { appointmentStartTime: start, appointmentEndTime: end };
+}
+
+
+// ==================== PATIENT OPERATIONS (modified addPatient) ====================
+
+
 export async function addPatient(patientData) {
-    try {
-        // ✅ Generate token number & queue position
-        const { tokenNumber } = await generateTokenAndPosition(patientData.priority);
+try {
+// 1) Calculate earliest appointment date
+const appointmentDate = await findEarliestAvailableDate(new Date());
 
-        const patient = {
-            name: patientData.name,
-            age: parseInt(patientData.age),
-            contact: patientData.contact,
-            complaint: patientData.complaint,
-            priority: patientData.priority,
-            tokenNumber: tokenNumber,  // ✅ Added token
-            status: 'waiting',
-            vitals: patientData.vitals || {},
-            symptoms: patientData.symptoms || [],
-            checkInTime: serverTimestamp(),
-            assignedRoom: null,
-            assignedRoomNumber: null,
-            assignedDoctor: null,
-            notes: patientData.notes || ''
-        };
 
-        const docRef = await addDoc(collection(db, 'patients'), patient);
-        await logAudit('registered', docRef.id, patient.name);
+// 2) Generate token within that date series
+const tokenNumber = await generateTokenForDate(patientData.priority, appointmentDate);
 
-        return { success: true, id: docRef.id, message: 'Patient registered successfully' };
-    } catch (error) {
-        console.error('Error adding patient:', error);
-        return { success: false, message: error.message };
-    }
+
+// 3) Determine slot index and compute times
+const slotIndex = await determineSlotIndexForDate(patientData.priority, appointmentDate);
+const times = computeTimesForSlotIndex(slotIndex);
+
+
+const patient = {
+name: patientData.name,
+age: parseInt(patientData.age),
+contact: patientData.contact,
+complaint: patientData.complaint,
+priority: patientData.priority,
+tokenNumber: tokenNumber,
+appointmentDate: appointmentDate,
+appointmentStartTime: times.appointmentStartTime,
+appointmentEndTime: times.appointmentEndTime,
+status: 'waiting',
+vitals: patientData.vitals || {},
+symptoms: patientData.symptoms || [],
+checkInTime: serverTimestamp(),
+assignedRoom: null,
+assignedRoomNumber: null,
+assignedDoctor: null,
+notes: patientData.notes || ''
+};
+
+
+const docRef = await addDoc(collection(db, 'patients'), patient);
+await logAudit('registered', docRef.id, patient.name);
+
+
+return { success: true, id: docRef.id, message: 'Patient registered and scheduled' };
+} catch (error) {
+console.error('Error adding patient:', error);
+return { success: false, message: error.message };
+}
 }
 
 /**

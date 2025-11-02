@@ -228,11 +228,11 @@ function renderQueue(patients) {
             <div class="patient-card" style="border-left-color: ${borderColor}">
                 <div class="patient-info">
                     <h3>👤 ${patient.name}
-                         <span style="float:right; color:#444; font-size:14px;">🧾 Token: ${patient.tokenNumber || 'N/A'}</span>
+                        <span style="float:right; color:#444; font-size:14px;">🧾 Token: ${patient.tokenNumber || 'N/A'}</span>
                     </h3>
-
                     <p><strong>Age:</strong> ${patient.age} | <strong>Contact:</strong> ${patient.contact}</p>
                     <p><strong>Complaint:</strong> ${patient.complaint}</p>
+                    <p style="margin-top:6px;"><strong>Appointment:</strong> ${patient.appointmentDate || 'TBD'} — ${patient.appointmentStartTime || ''} to ${patient.appointmentEndTime || ''}</p>
                     <p><strong>Wait Time:</strong> ${waitTime}</p>
                     <span class="priority-badge priority-${patient.priority}">${priorityText}</span>
                 </div>
@@ -266,6 +266,7 @@ function displaySearchResults(results) {
                 <h3>Patient: ${patient.name}</h3>
                 <p><strong>Age:</strong> ${patient.age} | <strong>Contact:</strong> ${patient.contact}</p>
                 <p><strong>Complaint:</strong> ${patient.complaint}</p>
+                <p><strong>Appointment:</strong> ${patient.appointmentDate || 'TBD'} — ${patient.appointmentStartTime || ''} to ${patient.appointmentEndTime || ''}</p>
                 <p><strong>Status:</strong> ${patient.status.toUpperCase()}</p>
                 <p><strong>Check-in:</strong> ${formattedDate}</p>
                 ${roomInfo}
