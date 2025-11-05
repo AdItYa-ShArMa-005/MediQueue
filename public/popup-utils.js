@@ -13,6 +13,8 @@
  * @param {string} options.type - 'success', 'error', 'warning', 'info', 'confirm'
  * @param {Array} options.buttons - Array of button objects
  * @param {Function} options.onClose - Callback when popup closes
+ * @param {boolean} options.autoClose - Auto close popup after timeout
+ * @param {number} options.timeout - Timeout in ms for auto close (default 2000)
  */
 export function showPopup(options = {}) {
     const {
@@ -20,7 +22,9 @@ export function showPopup(options = {}) {
         message = '',
         type = 'info',
         buttons = null,
-        onClose = null
+        onClose = null,
+        autoClose = false,
+        timeout = 2000
     } = options;
 
     // Remove any existing popups
@@ -112,6 +116,13 @@ export function showPopup(options = {}) {
     };
     document.addEventListener('keydown', escHandler);
 
+    // Auto close if enabled
+    if (autoClose) {
+        setTimeout(() => {
+            closePopup(true, onClose);
+        }, timeout);
+    }
+
     return new Promise((resolve) => {
         window.popupResolve = resolve;
     });
@@ -154,49 +165,81 @@ function removeAllPopups() {
 
 /**
  * Show success popup
+ * @param {string} title - Popup title
+ * @param {string} message - Popup message
+ * @param {Object|Function} optionsOrCallback - Options object or callback function for backward compatibility
  */
-export function showSuccess(title, message, onClose) {
+export function showSuccess(title, message, optionsOrCallback) {
+    // Handle backward compatibility - if third param is function, treat as onClose
+    let options = {};
+    if (typeof optionsOrCallback === 'function') {
+        options.onClose = optionsOrCallback;
+    } else if (typeof optionsOrCallback === 'object') {
+        options = optionsOrCallback;
+    }
+
     return showPopup({
         title,
         message,
         type: 'success',
-        onClose
+        ...options
     });
 }
 
 /**
  * Show error popup
  */
-export function showError(title, message, onClose) {
+export function showError(title, message, optionsOrCallback) {
+    let options = {};
+    if (typeof optionsOrCallback === 'function') {
+        options.onClose = optionsOrCallback;
+    } else if (typeof optionsOrCallback === 'object') {
+        options = optionsOrCallback;
+    }
+
     return showPopup({
         title,
         message,
         type: 'error',
-        onClose
+        ...options
     });
 }
 
 /**
  * Show warning popup
  */
-export function showWarning(title, message, onClose) {
+export function showWarning(title, message, optionsOrCallback) {
+    let options = {};
+    if (typeof optionsOrCallback === 'function') {
+        options.onClose = optionsOrCallback;
+    } else if (typeof optionsOrCallback === 'object') {
+        options = optionsOrCallback;
+    }
+
     return showPopup({
         title,
         message,
         type: 'warning',
-        onClose
+        ...options
     });
 }
 
 /**
  * Show info popup
  */
-export function showInfo(title, message, onClose) {
+export function showInfo(title, message, optionsOrCallback) {
+    let options = {};
+    if (typeof optionsOrCallback === 'function') {
+        options.onClose = optionsOrCallback;
+    } else if (typeof optionsOrCallback === 'object') {
+        options = optionsOrCallback;
+    }
+
     return showPopup({
         title,
         message,
         type: 'info',
-        onClose
+        ...options
     });
 }
 
@@ -212,6 +255,117 @@ export async function showConfirm(title, message) {
             { text: 'No', style: 'secondary', onClick: () => false },
             { text: 'Yes', style: 'primary', onClick: () => true }
         ]
+    });
+}
+
+/**
+ * Show input dialog
+ * @param {string} title - Dialog title
+ * @param {string} message - Dialog message
+ * @param {string} placeholder - Input placeholder text
+ * @returns {Promise<string|null>} - Returns input value or null if cancelled
+ */
+export async function showInput(title, message, placeholder = '') {
+    removeAllPopups();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'custom-popup-overlay';
+    overlay.id = 'customPopupOverlay';
+
+    // Create popup
+    const popup = document.createElement('div');
+    popup.className = 'custom-popup popup-info';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'custom-popup-header';
+    header.innerHTML = `
+        <h3>ℹ️ ${title}</h3>
+        <button class="custom-popup-close" id="popupCloseBtn">&times;</button>
+    `;
+
+    // Create content with input
+    const content = document.createElement('div');
+    content.className = 'custom-popup-content';
+    content.innerHTML = `
+        <p style="margin-bottom: 15px;">${message}</p>
+        <input type="text" id="popupInputField" placeholder="${placeholder}" 
+               style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;" />
+    `;
+
+    // Create footer
+    const footer = document.createElement('div');
+    footer.className = 'custom-popup-footer';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'custom-popup-btn custom-popup-btn-secondary';
+    cancelBtn.textContent = 'Cancel';
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'custom-popup-btn custom-popup-btn-primary';
+    submitBtn.textContent = 'Submit';
+
+    footer.appendChild(cancelBtn);
+    footer.appendChild(submitBtn);
+
+    // Assemble
+    popup.appendChild(header);
+    popup.appendChild(content);
+    popup.appendChild(footer);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    // Return promise
+    return new Promise((resolve) => {
+        const inputField = document.getElementById('popupInputField');
+        
+        // Focus input
+        setTimeout(() => inputField.focus(), 100);
+
+        const cleanup = (value) => {
+            overlay.style.animation = 'fadeOut 0.2s ease-in-out';
+            setTimeout(() => {
+                overlay.remove();
+                resolve(value);
+            }, 200);
+        };
+
+        // Submit button
+        submitBtn.onclick = () => {
+            const value = inputField.value.trim();
+            cleanup(value || null);
+        };
+
+        // Cancel button
+        cancelBtn.onclick = () => cleanup(null);
+
+        // Close button
+        document.getElementById('popupCloseBtn').onclick = () => cleanup(null);
+
+        // Enter key to submit
+        inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const value = inputField.value.trim();
+                cleanup(value || null);
+            }
+        });
+
+        // Escape key to cancel
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                cleanup(null);
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        // Click outside to cancel
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                cleanup(null);
+            }
+        };
     });
 }
 
